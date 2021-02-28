@@ -92,7 +92,7 @@ want a space that is not part of the link itself."
 ;;;; Variables
 
 (defconst org-media-note--video-types '("avi" "rmvb" "ogg" "ogv" "mp4" "mkv" "mov" "webm" "flv" "ts"))
-(defconst org-media-note--audio-types '("flac" "mp3" "wav"))
+(defconst org-media-note--audio-types '("flac" "mp3" "wav" "m4a"))
 
 (defvar org-media-note-last-play-speed 1.0
   "Last play speed in mpv.")
@@ -103,39 +103,57 @@ want a space that is not part of the link itself."
 ;;;; Commands
 ;;;;; Hydra
 
+(defun org-media-note-insert-10-seconds-behind ()
+  "Insert link with a 10 second back-time."
+  (interactive)
+  (mpv-seek-backward 10)
+  (org-media-note-insert-link)
+  (mpv-seek-forward 10))
+   
+  (defun org-media-note-insert-link ()
+  "Insert current mpv timestamp link into Org-mode note."
+  (interactive)
+  (let ((point (point)))
+    (insert
+     org-media-note-link-prefix
+     (format "%s "
+             (org-media-note--link)))
+    (when (eq org-media-note-cursor-start-position 'before)
+      (goto-char point))))
+
 (defun org-media-note--hydra-title ()
-"Title for `org-media-note-hydra'"
-(let ((file-path (mpv-get-property "path"))
-      (ref-key (org-media-note--current-org-ref-key))
-      (icon (if (featurep 'all-the-icons) (all-the-icons-material "ondemand_video") ""))
-      speed current-hms total-hms duration remaining-hms)
-  (if file-path
-      ;; Title when mpv is playing media
-      (progn
-        (setq speed (mpv-get-property "speed"))
-        (setq volume (mpv-get-property "volume"))
-        (setq current-hms (org-media-note--get-current-hms))
-        (setq duration (mpv-get-property "duration"))
-        (setq total-hms (org-timer-secs-to-hms (round duration)))
-        (setq remaining-hms (org-timer-secs-to-hms (round (mpv-get-property "playtime-remaining"))))
-        (s-concat icon " org-media-note: "
-                  current-hms
-                  " / "
-                  total-hms
-                  "\t Volume: "
-                  (number-to-string volume)
-                  "\t Speed: "
-                  (number-to-string speed)
-                  "\t Remaining: "
-                  remaining-hms
-                  "\n\t❯ "
-                  (if (org-media-note-ref-cite-p)
-                      (format "%s (%s)"
-                              (bibtex-completion-get-value-by-key ref-key "title")
-                              ref-key)
-                    file-path)))
-    ;; Title when no media is playing
-    (concat icon " org-media-note"))))
+  "Title for `org-media-note-hydra'"
+  (let ((file-path (mpv-get-property "path"))
+	(ref-key (org-media-note--current-org-ref-key))
+	(icon (if (featurep 'all-the-icons) (all-the-icons-material "ondemand_video") ""))
+	speed current-hms total-hms duration remaining-hms)
+    (if file-path
+	;; Title when mpv is playing media
+	(progn
+          (setq speed (mpv-get-property "speed"))
+          (setq volume (mpv-get-property "volume"))
+          (setq current-hms (org-media-note--get-current-hms))
+          (setq duration (mpv-get-property "duration"))
+          (setq total-hms (org-timer-secs-to-hms (round duration)))
+          (setq remaining-hms (org-timer-secs-to-hms (round (mpv-get-property "playtime-remaining"))))
+          (s-concat icon " org-media-note: "
+                    current-hms
+                    " / "
+                    total-hms
+                    "\t Volume: "
+                    (number-to-string volume)
+                    "\t Speed: "
+                    (number-to-string speed)
+                    "\t Remaining: "
+                    remaining-hms
+                    "\n\t❯ "
+                    (if (org-media-note-ref-cite-p)
+			(format "%s (%s)"
+				(bibtex-completion-get-value-by-key ref-key "title")
+				ref-key)
+                      file-path)))
+      ;; Title when no media is playing
+      (concat icon " org-media-note"))))
 
 
 (pretty-hydra-define org-media-note-hydra
@@ -185,8 +203,10 @@ want a space that is not part of the link itself."
      "(un)mute"))
    "Note"
    (("i" org-media-note-insert-link "Insert timestamp")
+    ("I" org-media-note-insert-10-seconds-behind "Insert -10 seconds")
     ("n" org-media-note-insert-link-and-pause "Insert timestamp and pause")
-    ("I" org-media-note-insert-screenshot "Insert Screenshot")
+    ("N" org-media-note-insert-10-seconds-behind-and-pause "Insert -10 seconds and pause")
+    ("S" org-media-note-insert-screenshot "Insert Screenshot")
     ("p" org-media-note-insert-note-from-pbf "Import from pbf")
     ("s"
      (insert (mpv-get-property "sub-text"))
@@ -308,6 +328,12 @@ pause the media."
   (org-media-note-insert-link)
   (mpv-pause))
 
+(defun org-media-note-insert-10-seconds-behind-and-pause ()
+  "Insert 10 second previous time stamp and pause."
+  (interactive)
+  (org-media-note-insert-10-seconds-behind)
+  (mpv-pause))
+
 (defun org-media-note--link-formatter (string map)
   "MAP is an alist in the form of '((PLACEHOLDER . REPLACEMENT))
 STRING is the original string.  Each placeholder can be a string, 
@@ -319,7 +345,7 @@ For example:
 (let ((input-string  \"Words,  %test1%test2 more words %test1.\")
       (map '((test1 . \"asdf\")
              (test2 . \"zxcv\"))))
-  (org-media-note--link-formatter input-string map))
+sc (org-media-note--link-formatter input-string map))
 
 Returns:
 \"Words,  asdfzxcv more words asdf.\""
@@ -367,7 +393,7 @@ Returns:
 		 ("timestamp" . ,timestamp)
 		 ("file-path" . ,file-path)))))))
 
-(defun org-at-item-meida-item-p ()
+(defun org-at-item-media-item-p ()
   "Is point at a line starting a plain list item with a media-note link?"
   (or (org-list-at-regexp-after-bullet-p "\\(\\[\\[video.+\\)")
       (org-list-at-regexp-after-bullet-p "\\(\\[\\[audio.+\\)")))
